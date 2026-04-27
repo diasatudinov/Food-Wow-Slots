@@ -1,37 +1,20 @@
 import SwiftUI
 
-// MARK: - Constants
+struct MenuScrollMachineView: View {
 
-private let reelItemHeight: CGFloat = 78
-private let reelVisibleRows = 3
-private let reelRepeatCount = 24
-private let reelBaseCopyIndex = 8
-
-// MARK: - Main View
-
-struct MenuSlotMachineView: View {
-
-    @State private var selectedCategory: MealCategory = .lunch
-    @State private var reels: [ReelState] = []
+    @ObservedObject var viewModel: FSFavoritesViewModel
+    
+    @State private var selectedMeal: MealType = .lunch
+    @State private var spinToken = 0
     @State private var isSpinning = false
+    @State private var targetIndexes: [Int] = [0, 0, 0]
+    @State private var finishedColumns = 0
+    @State private var showResultPopup = false
 
-    init() {
-        let initialColumns = MealCategory.lunch.columns
-        _reels = State(initialValue: initialColumns.map { ReelState(itemCount: $0.items.count) })
-    }
+    private let itemHeight: CGFloat = 78
 
     private var columns: [MenuColumn] {
-        selectedCategory.columns
-    }
-
-    private var resultText: String {
-        guard reels.count == 3 else { return "" }
-
-        let first = columns[0].items[reels[0].currentResult]
-        let second = columns[1].items[reels[1].currentResult]
-        let third = columns[2].items[reels[2].currentResult]
-
-        return "\(first) • \(second) • \(third)"
+        selectedMeal.columns
     }
 
     var body: some View {
@@ -44,59 +27,56 @@ struct MenuSlotMachineView: View {
                 backgroundView
                     .ignoresSafeArea()
 
-                VStack(spacing: 24) {
-                    Spacer(minLength: 12)
+                VStack(spacing: 22) {
+                   
 
-                    Text("Menu")
-                        .font(.system(size: 34, weight: .heavy))
-                        .foregroundColor(.yellow)
+                    Image(.menuTextFS)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 20)
 
-                    categoryPicker
+                    mealPicker
+                        .padding(.bottom, 40)
 
-                    VStack(spacing: 12) {
+                    HStack(spacing: spacing) {
+                        ForEach(columns.indices, id: \.self) { index in
+                            Text(columns[index].title.uppercased())
+                                .font(.system(size: 18, weight: .black))
+                                .foregroundColor(.yellow)
+                                .frame(width: columnWidth)
+                        }
+                    }
+                    .padding(.top, 6)
+
+                    ZStack {
                         HStack(spacing: spacing) {
-                            ForEach(0..<columns.count, id: \.self) { index in
-                                Text(columns[index].title.uppercased())
-                                    .font(.system(size: 17, weight: .black))
-                                    .foregroundColor(.yellow)
-                                    .frame(width: columnWidth)
+                            ForEach(columns.indices, id: \.self) { index in
+                                MenuScrollColumnView(
+                                    items: columns[index].items,
+                                    width: columnWidth,
+                                    itemHeight: itemHeight,
+                                    spinToken: spinToken,
+                                    targetIndex: targetIndexes[index],
+                                    pattern: pattern(for: index),
+                                    durationSet: durations(for: index),
+                                    onFinished: {
+                                        finishedColumns += 1
+
+                                        if finishedColumns == 3 {
+                                            isSpinning = false
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                showResultPopup = true
+                                            }
+                                        }
+                                    }
+                                )
                             }
                         }
 
-                        ZStack {
-                            HStack(spacing: spacing) {
-                                ForEach(0..<columns.count, id: \.self) { index in
-                                    SlotReelView(
-                                        items: columns[index].items,
-                                        reel: reels[index],
-                                        width: columnWidth
-                                    )
-                                }
-                            }
-
-                            selectionBand
-                        }
+                        selectionFrame
                     }
-                    .padding(.top, 8)
-
-                    VStack(spacing: 8) {
-                        Text("ВЫБОР")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white.opacity(0.7))
-
-                        Text(resultText)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 16)
-                    }
-                    .padding(.vertical, 14)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.white.opacity(0.10))
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
                     .padding(.horizontal, horizontalPadding)
-
-                    Spacer()
+                    .padding(.bottom, 30)
 
                     Button(action: spin) {
                         HStack(spacing: 12) {
@@ -110,208 +90,358 @@ struct MenuSlotMachineView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 88)
                         .background(
-                            LinearGradient(
-                                colors: [
-                                    Color.yellow,
-                                    Color.orange,
-                                    Color(red: 0.95, green: 0.45, blue: 0.02)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
+                            Gradients.spinBtn.linear
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 28))
                         .shadow(color: .orange.opacity(0.55), radius: 16, x: 0, y: 8)
                     }
                     .disabled(isSpinning)
                     .padding(.horizontal, horizontalPadding)
-                    .padding(.bottom, 32)
+                    
+                    Spacer(minLength: 20)
+                }
+                .padding(.top, 40)
+                
+                if showResultPopup {
+                    resultPopup
                 }
             }
         }
-        .onChange(of: selectedCategory) { _ in
-            resetReels()
+        .onChange(of: selectedMeal) { _ in
+            showResultPopup = false
         }
     }
-
-    // MARK: - UI Parts
 
     private var backgroundView: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.02, green: 0.09, blue: 0.48),
-                Color(red: 0.00, green: 0.45, blue: 0.82),
-                Color(red: 0.00, green: 0.78, blue: 0.74)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        Image(.appBgFS)
+            .resizable()
     }
 
-    private var categoryPicker: some View {
-        HStack(spacing: 0) {
-            ForEach(MealCategory.allCases) { category in
+    private var mealPicker: some View {
+        HStack(spacing: 12) {
+            ForEach(MealType.allCases) { meal in
                 Button {
                     guard !isSpinning else { return }
-                    selectedCategory = category
+                    selectedMeal = meal
+                    showResultPopup = false
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: category.icon)
-                            .font(.system(size: 16, weight: .semibold))
-
-                        Text(category.title)
-                            .font(.system(size: 17, weight: .bold))
-                    }
-                    .foregroundColor(selectedCategory == category ? .black : .white.opacity(0.75))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 58)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18)
-                            .fill(selectedCategory == category ? Color.yellow : Color.white.opacity(0.10))
-                    )
+                    
+                    Image("\(meal.image)\(selectedMeal == meal ? "On" : "Off")")
+                        .resizable()
+                        .scaledToFit()
                 }
             }
         }
-        .padding(6)
-        .background(Color.white.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 22))
         .padding(.horizontal, 24)
     }
 
-    private var selectionBand: some View {
-        RoundedRectangle(cornerRadius: 18)
-            .fill(Color.yellow.opacity(0.18))
-            .frame(height: reelItemHeight)
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(Color.yellow, lineWidth: 4)
-            )
-            .padding(.horizontal, 4)
+    private var selectionFrame: some View {
+        
+        Image(.selectionFrameFS)
+            .resizable()
+            .scaledToFit()
+            .padding(.horizontal, -24)
             .allowsHitTesting(false)
+            
     }
 
-    // MARK: - Actions
+    private var resultPopup: some View {
+        ZStack {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    showResultPopup = false
+                }
 
-    private func resetReels() {
-        reels = columns.map { ReelState(itemCount: $0.items.count) }
+            VStack(spacing: 18) {
+                Text("Your Meal\nCombo!")
+                    .font(.system(size: 30, weight: .black))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+
+                VStack(spacing: 12) {
+                    resultRow(image: "mainIcon", title: columns[0].title, value: columns[0].items[targetIndexes[0]])
+                    resultRow(image: "drinkIcon", title: columns[1].title, value: columns[1].items[targetIndexes[1]])
+                    resultRow(image: "sideIcon", title: columns[2].title, value: columns[2].items[targetIndexes[2]])
+                }
+                
+                VStack {
+                    Button {
+                        showResultPopup = false
+                        let meal = Meal(main: columns[0].items[targetIndexes[0]], drink: columns[1].items[targetIndexes[1]], side: columns[2].items[targetIndexes[2]])
+                        viewModel.addMeal(meal)
+                    } label: {
+                        HStack {
+                            Image(systemName: "heart.fill")
+                            
+                            Text("Save to Favorites")
+                        }
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Gradients.spinBtn.linear)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    
+                    HStack {
+                        Button {
+                            showResultPopup = false
+                        } label: {
+                            Text("Close")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(.white.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                        
+                        Button {
+                            showResultPopup = false
+                        } label: {
+                            Text("Spin Again")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(Color.btn3.opacity(0.5))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                    }
+                    
+                }
+            }
+            .padding(22)
+            .frame(maxWidth: 340)
+            .background(.resultBg)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(Color.resultStroke, lineWidth: 1)
+            )
+            .padding(.horizontal, 24)
+        }
+        .transition(.opacity)
+    }
+
+    private func resultRow(image: String, title: String, value: String) -> some View {
+        HStack {
+            Image(image)
+                .resizable()
+                .scaledToFit()
+                .frame(height: 35)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title.uppercased())
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.yellow)
+                
+                Text(value)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(lineWidth: 1)
+                .foregroundStyle(.yellow)
+        }
     }
 
     private func spin() {
         guard !isSpinning else { return }
-        guard reels.count == columns.count else { return }
 
+        showResultPopup = false
         isSpinning = true
+        finishedColumns = 0
 
-        for index in reels.indices {
-            let delay = Double(index) * 0.18
-            spinReel(at: index, delay: delay)
-        }
+        targetIndexes = columns.map { _ in Int.random(in: 0..<10) }
+        spinToken += 1
+    }
 
-        let lastDuration = 2.0 + Double(reels.count - 1) * 0.35
-        let lastDelay = Double(reels.count - 1) * 0.18
-        let totalTime = lastDuration + lastDelay
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + totalTime + 0.1) {
-            isSpinning = false
+    private func pattern(for index: Int) -> [ScrollEdge] {
+        switch index {
+        case 0:
+            return [.bottom, .top, .bottom]
+        case 1:
+            return [.top, .bottom, .top, .bottom]
+        default:
+            return [.bottom, .top, .bottom, .top]
         }
     }
 
-    private func spinReel(at index: Int, delay: Double) {
-        let itemsCount = columns[index].items.count
-        let newResult = Int.random(in: 0..<itemsCount)
-        let currentResult = reels[index].currentResult
-
-        let delta = (newResult - currentResult + itemsCount) % itemsCount
-        let extraRounds = Int.random(in: 5...7)
-        let targetDisplayIndex = reels[index].currentDisplayIndex + extraRounds * itemsCount + delta
-        let duration = 2.0 + Double(index) * 0.35
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            withAnimation(.easeOut(duration: duration)) {
-                reels[index].offset = ReelState.offset(for: targetDisplayIndex)
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
-                reels[index].currentResult = newResult
-                reels[index].currentDisplayIndex = reelBaseCopyIndex * itemsCount + newResult
-                reels[index].offset = ReelState.offset(for: reels[index].currentDisplayIndex)
-            }
+    private func durations(for index: Int) -> [Double] {
+        switch index {
+        case 0:
+            return [0.70, 0.75, 0.65, 0.35]
+        case 1:
+            return [0.55, 0.80, 0.60, 0.75, 0.35]
+        default:
+            return [0.80, 0.60, 0.75, 0.55, 0.35]
         }
     }
 }
 
-// MARK: - Reel View
-
-struct SlotReelView: View {
+struct MenuScrollColumnView: View {
     let items: [String]
-    let reel: ReelState
     let width: CGFloat
+    let itemHeight: CGFloat
+    let spinToken: Int
+    let targetIndex: Int
+    let pattern: [ScrollEdge]
+    let durationSet: [Double]
+    let onFinished: () -> Void
+
+    private let repeatCount = 12
+    private let middleCycle = 5
+
+    @State private var didSetupInitialPosition = false
 
     private var repeatedItems: [String] {
-        Array(repeating: items, count: reelRepeatCount).flatMap { $0 }
+        Array(repeating: items, count: repeatCount).flatMap { $0 }
+    }
+
+    private var centerIndex: Int {
+        middleCycle * items.count
     }
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 28)
-                .fill(Color.white.opacity(0.08))
+        ScrollViewReader { proxy in
+            ZStack {
+                RoundedRectangle(cornerRadius: 28)
+                    .fill(Color.white.opacity(0.08))
 
-            RoundedRectangle(cornerRadius: 28)
-                .stroke(Color.white.opacity(0.95), lineWidth: 3)
+                RoundedRectangle(cornerRadius: 28)
+                    .stroke(Color.white.opacity(0.95), lineWidth: 3)
 
-            VStack(spacing: 0) {
-                ForEach(Array(repeatedItems.enumerated()), id: \.offset) { _, item in
-                    Text(item)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.75)
-                        .padding(.horizontal, 8)
-                        .frame(width: width, height: reelItemHeight)
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 0) {
+                        Color.clear
+                            .frame(height: itemHeight)
+
+                        ForEach(Array(repeatedItems.enumerated()), id: \.offset) { index, item in
+                            Text(item)
+                                .font(.system(size: 17, weight: .bold))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.72)
+                                .padding(.horizontal, 8)
+                                .frame(width: width, height: itemHeight)
+                                .id(index)
+                        }
+
+                        Color.clear
+                            .frame(height: itemHeight)
+                    }
+                }
+                .scrollDisabled(true)
+                .onAppear {
+                    guard !didSetupInitialPosition else { return }
+                    didSetupInitialPosition = true
+
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(centerIndex, anchor: .center)
+                    }
+                }
+                .onChange(of: spinToken) { _ in
+                    Task { @MainActor in
+                        await runSpin(proxy: proxy)
+                    }
+                }
+
+                VStack {
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.35), Color.clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 54)
+
+                    Spacer()
+
+                    LinearGradient(
+                        colors: [Color.clear, Color.black.opacity(0.35)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 54)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+                .allowsHitTesting(false)
+            }
+            .frame(width: width, height: itemHeight * 3)
+            .clipped()
+        }
+    }
+
+    @MainActor
+    private func runSpin(proxy: ScrollViewProxy) async {
+        let topIndex = 0
+        let bottomIndex = repeatedItems.count - 1
+        let finalIndex = centerIndex + targetIndex
+
+        for (step, edge) in pattern.enumerated() {
+            let duration = durationSet[min(step, durationSet.count - 1)]
+
+            withAnimation(.easeInOut(duration: duration)) {
+                switch edge {
+                case .top:
+                    proxy.scrollTo(topIndex, anchor: .center)
+                case .bottom:
+                    proxy.scrollTo(bottomIndex, anchor: .center)
                 }
             }
-            .offset(y: reel.offset)
 
-            VStack {
-                LinearGradient(
-                    colors: [Color.black.opacity(0.35), Color.clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 56)
-
-                Spacer()
-
-                LinearGradient(
-                    colors: [Color.clear, Color.black.opacity(0.35)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 56)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 28))
-            .allowsHitTesting(false)
+            try? await Task.sleep(nanoseconds: UInt64((duration + 0.08) * 1_000_000_000))
         }
-        .frame(width: width, height: reelItemHeight * CGFloat(reelVisibleRows))
-        .clipped()
+
+        let finalDuration = durationSet.last ?? 0.35
+
+        withAnimation(.easeOut(duration: finalDuration)) {
+            proxy.scrollTo(finalIndex, anchor: .center)
+        }
+
+        try? await Task.sleep(nanoseconds: UInt64((finalDuration + 0.05) * 1_000_000_000))
+        onFinished()
     }
 }
 
-// MARK: - Models
+enum ScrollEdge {
+    case top
+    case bottom
+}
 
 struct MenuColumn {
     let title: String
     let items: [String]
 }
 
-enum MealCategory: String, CaseIterable, Identifiable {
+enum MealType: String, CaseIterable, Identifiable {
     case breakfast
     case lunch
     case dinner
 
     var id: String { rawValue }
 
+    var image: String {
+        switch self {
+        case .breakfast:
+            "breakfast"
+        case .lunch:
+            "lunch"
+        case .dinner:
+            "dinner"
+        }
+    }
     var title: String {
         switch self {
         case .breakfast: return "Breakfast"
@@ -333,48 +463,48 @@ enum MealCategory: String, CaseIterable, Identifiable {
         case .breakfast:
             return [
                 MenuColumn(
-                    title: "Продукт",
+                    title: "Main",
                     items: [
-                        "Омлет",
-                        "Овсянка",
-                        "Творог",
-                        "Блины",
-                        "Сырники",
-                        "Тост с яйцом",
-                        "Гречка",
-                        "Йогурт-парфе",
-                        "Круассан",
-                        "Лаваш с сыром"
+                        "Omelet",
+                        "Oatmeal",
+                        "Cottage Cheese",
+                        "Pancakes",
+                        "Syrniki",
+                        "Egg Toast",
+                        "Buckwheat",
+                        "Yogurt Parfait",
+                        "Croissant",
+                        "Cheese Lavash"
                     ]
                 ),
                 MenuColumn(
-                    title: "Напиток",
+                    title: "Drink",
                     items: [
-                        "Кофе",
-                        "Чай зелёный",
-                        "Апельсиновый сок",
-                        "Какао",
-                        "Смузи",
-                        "Молоко",
-                        "Цикорий",
-                        "Компот",
-                        "Вода с лимоном",
-                        "Кефир"
+                        "Coffee",
+                        "Green Tea",
+                        "Orange Juice",
+                        "Cocoa",
+                        "Smoothie",
+                        "Milk",
+                        "Chicory",
+                        "Compote",
+                        "Lemon Water",
+                        "Kefir"
                     ]
                 ),
                 MenuColumn(
-                    title: "Сладкое",
+                    title: "Sweet",
                     items: [
-                        "Мёд",
-                        "Варенье",
-                        "Шоколадный батончик",
-                        "Фруктовый салат",
-                        "Печенье",
-                        "Мармелад",
-                        "Ореховая паста",
-                        "Сгущёнка",
-                        "Зефир",
-                        "Пастила"
+                        "Honey",
+                        "Jam",
+                        "Chocolate Bar",
+                        "Fruit Salad",
+                        "Cookies",
+                        "Marmalade",
+                        "Nut Butter",
+                        "Condensed Milk",
+                        "Marshmallow",
+                        "Pastila"
                     ]
                 )
             ]
@@ -382,48 +512,48 @@ enum MealCategory: String, CaseIterable, Identifiable {
         case .lunch:
             return [
                 MenuColumn(
-                    title: "Суп",
+                    title: "Soup",
                     items: [
-                        "Борщ",
-                        "Солянка",
-                        "Том Ям",
-                        "Грибной крем-суп",
-                        "Окрошка",
-                        "Рассольник",
-                        "Чечевичный суп",
-                        "Уха",
-                        "Гороховый суп",
-                        "Мисо-суп"
+                        "Borscht",
+                        "Solyanka",
+                        "Tom Yum",
+                        "Mushroom Cream Soup",
+                        "Okroshka",
+                        "Rassolnik",
+                        "Lentil Soup",
+                        "Fish Soup",
+                        "Pea Soup",
+                        "Miso Soup"
                     ]
                 ),
                 MenuColumn(
-                    title: "Напиток",
+                    title: "Drink",
                     items: [
-                        "Морс",
-                        "Чай чёрный",
-                        "Лимонад",
-                        "Квас",
-                        "Компот из сухофруктов",
-                        "Вода",
-                        "Йогурт питьевой",
-                        "Айран",
-                        "Томатный сок",
-                        "Сельдерейный сок"
+                        "Mors",
+                        "Black Tea",
+                        "Lemonade",
+                        "Kvass",
+                        "Dried Fruit Compote",
+                        "Water",
+                        "Drinking Yogurt",
+                        "Ayran",
+                        "Tomato Juice",
+                        "Celery Juice"
                     ]
                 ),
                 MenuColumn(
-                    title: "Салат",
+                    title: "Salad",
                     items: [
-                        "Цезарь",
-                        "Греческий",
-                        "Оливье",
-                        "Винегрет",
-                        "Крабовый",
-                        "Капрезе",
-                        "Свёкла с чесноком",
-                        "Морковь по-корейски",
-                        "Салат с тунцом",
-                        "Руккола с грушей"
+                        "Caesar",
+                        "Greek Salad",
+                        "Olivier Salad",
+                        "Vinaigrette",
+                        "Crab Salad",
+                        "Caprese",
+                        "Beetroot with Garlic",
+                        "Korean Carrot Salad",
+                        "Tuna Salad",
+                        "Arugula with Pear"
                     ]
                 )
             ]
@@ -431,48 +561,48 @@ enum MealCategory: String, CaseIterable, Identifiable {
         case .dinner:
             return [
                 MenuColumn(
-                    title: "Горячее",
+                    title: "Main",
                     items: [
-                        "Стейк",
-                        "Куриная грудка",
-                        "Лосось на гриле",
-                        "Котлеты",
-                        "Фаршированные перцы",
-                        "Паста Карбонара",
-                        "Шашлык",
-                        "Тефтели",
-                        "Запечённая рыба",
-                        "Жаркое"
+                        "Steak",
+                        "Chicken Breast",
+                        "Grilled Salmon",
+                        "Cutlets",
+                        "Stuffed Peppers",
+                        "Pasta Carbonara",
+                        "Shashlik",
+                        "Meatballs",
+                        "Baked Fish",
+                        "Roast"
                     ]
                 ),
                 MenuColumn(
-                    title: "Гарнир",
+                    title: "Side",
                     items: [
-                        "Рис",
-                        "Гречка",
-                        "Картофель пюре",
-                        "Макароны",
-                        "Овощи гриль",
-                        "Киноа",
-                        "Булгур",
-                        "Тушёная капуста",
-                        "Фасоль",
-                        "Кускус"
+                        "Rice",
+                        "Buckwheat",
+                        "Mashed Potatoes",
+                        "Pasta",
+                        "Grilled Vegetables",
+                        "Quinoa",
+                        "Bulgur",
+                        "Braised Cabbage",
+                        "Beans",
+                        "Couscous"
                     ]
                 ),
                 MenuColumn(
-                    title: "Напиток",
+                    title: "Drink",
                     items: [
-                        "Красное вино",
-                        "Белый чай",
-                        "Кефир",
-                        "Вода с мятой",
-                        "Имбирный чай",
-                        "Компот",
-                        "Минералка",
-                        "Ряженка",
-                        "Травяной настой",
-                        "Сок грейпфрута"
+                        "Red Wine",
+                        "White Tea",
+                        "Kefir",
+                        "Mint Water",
+                        "Ginger Tea",
+                        "Compote",
+                        "Sparkling Water",
+                        "Ryazhenka",
+                        "Herbal Tea",
+                        "Grapefruit Juice"
                     ]
                 )
             ]
@@ -480,25 +610,6 @@ enum MealCategory: String, CaseIterable, Identifiable {
     }
 }
 
-struct ReelState {
-    var currentResult: Int = 0
-    var currentDisplayIndex: Int
-    var offset: CGFloat
-
-    init(itemCount: Int) {
-        currentDisplayIndex = reelBaseCopyIndex * itemCount
-        offset = ReelState.offset(for: currentDisplayIndex)
-    }
-
-    static func offset(for displayIndex: Int) -> CGFloat {
-        -CGFloat(displayIndex - 1) * reelItemHeight
-    }
-}
-
-// MARK: - Preview
-
-struct MenuSlotMachineView_Previews: PreviewProvider {
-    static var previews: some View {
-        MenuSlotMachineView()
-    }
+#Preview {
+    MenuScrollMachineView(viewModel: FSFavoritesViewModel())
 }

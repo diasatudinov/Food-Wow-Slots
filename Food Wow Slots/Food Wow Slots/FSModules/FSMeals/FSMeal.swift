@@ -2,7 +2,14 @@
 //  FSMeal.swift
 //  Food Wow Slots
 //
-//  Created by Dias Atudinov on 27.04.2026.
 //
 
 import Foundation
+
+struct Meal: Codable, Hashable, Identifiable {
+    let id = UUID()
+    var main: String
+    var drink: String
+    var side: String
+    var date: Date = .now
+}
