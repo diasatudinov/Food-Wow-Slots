@@ -37,13 +37,13 @@ struct FSMenuView: View {
                 MenuScrollMachineView(viewModel: viewModel)
                     .tag(0)
                 
-                Color.green
+                FSDietView(viewModel: viewModel)
                     .tag(1)
                 
-                Color.blue
+                QuickSnackScrollMachineView(viewModel: viewModel)
                     .tag(2)
                 
-                Color.blue
+                FSFavoritesView(viewModel: viewModel)
                     .tag(3)
             }
             

@@ -2,7 +2,6 @@
 //  FSLoaderView.swift
 //  Food Wow Slots
 //
-//  Created by Dias Atudinov on 29.04.2026.
 //
 
 import SwiftUI

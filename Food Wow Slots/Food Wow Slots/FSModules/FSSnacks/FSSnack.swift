@@ -2,7 +2,14 @@
 //  FSSnack.swift
 //  Food Wow Slots
 //
-//  Created by Dias Atudinov on 28.04.2026.
 //
 
 import Foundation
+
+struct Snack: Codable, Hashable, Identifiable {
+    let id = UUID()
+    var base: String
+    var filling: String
+    var sauce: String
+    var date: Date = .now
+}

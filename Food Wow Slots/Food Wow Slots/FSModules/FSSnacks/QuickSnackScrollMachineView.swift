@@ -1,7 +1,15 @@
+//
+//  QuickSnackScrollMachineView.swift
+//  Food Wow Slots
+//
+//
+
+
 import SwiftUI
 
 struct QuickSnackScrollMachineView: View {
-
+    @ObservedObject var viewModel: FSFavoritesViewModel
+    
     @State private var spinToken = 0
     @State private var isSpinning = false
     @State private var targetIndex: Int = 0
@@ -38,12 +46,10 @@ struct QuickSnackScrollMachineView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 24) {
-                    Spacer(minLength: 18)
 
                     headerView
                         .padding(.horizontal, horizontalPadding)
 
-                    Spacer(minLength: 120)
 
                     HStack(spacing: spacing) {
                         Text("Base")
@@ -96,7 +102,6 @@ struct QuickSnackScrollMachineView: View {
                     }
                     .padding(.horizontal, horizontalPadding)
 
-                    Spacer()
 
                     Button(action: spin) {
                         HStack(spacing: 12) {
@@ -125,8 +130,11 @@ struct QuickSnackScrollMachineView: View {
                     }
                     .disabled(isSpinning)
                     .padding(.horizontal, horizontalPadding)
-                    .padding(.bottom, 34)
-                }
+                    
+                    
+                    Spacer(minLength: 18)
+
+                }.padding(.vertical, 50)
 
                 if showResultPopup {
                     resultPopup
@@ -138,21 +146,11 @@ struct QuickSnackScrollMachineView: View {
     // MARK: - Header
 
     private var headerView: some View {
-        VStack(alignment: .leading, spacing: 28) {
+        VStack(alignment: .center, spacing: 28) {
             HStack(spacing: 18) {
-                Button {
-                    // сюда можно добавить dismiss / back action
-                } label: {
-                    Image(systemName: "arrow.left")
-                        .font(.system(size: 28, weight: .medium))
-                        .foregroundColor(.white)
-                        .frame(width: 64, height: 64)
-                        .background(Color.white.opacity(0.10))
-                        .clipShape(Circle())
-                }
-
+                
                 Text("QUICK SNACKS")
-                    .font(.system(size: 34, weight: .heavy))
+                    .font(.system(size: 34, weight: .black))
                     .foregroundColor(Color(red: 0.30, green: 0.90, blue: 0.95))
                     .minimumScaleFactor(0.8)
             }
@@ -161,32 +159,21 @@ struct QuickSnackScrollMachineView: View {
                 .font(.system(size: 20, weight: .medium))
                 .foregroundColor(Color.white.opacity(0.82))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     // MARK: - UI
 
     private var backgroundView: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.02, green: 0.05, blue: 0.45),
-                Color(red: 0.02, green: 0.35, blue: 0.65),
-                Color(red: 0.05, green: 0.70, blue: 0.82)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        Image(.appBgFS)
+            .resizable()
     }
 
     private var selectionFrame: some View {
-        RoundedRectangle(cornerRadius: 18)
-            .fill(Color.yellow.opacity(0.14))
-            .frame(height: itemHeight)
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(Color.yellow, lineWidth: 4)
-            )
-            .shadow(color: .yellow.opacity(0.25), radius: 8)
+        Image(.selectionFrameFS)
+            .resizable()
+            .scaledToFit()
+            .padding(.horizontal, -24)
             .allowsHitTesting(false)
     }
 
@@ -200,55 +187,151 @@ struct QuickSnackScrollMachineView: View {
 
             VStack(spacing: 18) {
                 Text("Your Snack")
-                    .font(.system(size: 28, weight: .heavy))
+                    .font(.system(size: 30, weight: .black))
                     .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
 
-                VStack(spacing: 12) {
-                    resultRow(title: "Base", value: selectedCombination.base)
-                    resultRow(title: "Filling", value: selectedCombination.filling)
-                    resultRow(title: "Sauce", value: selectedCombination.sauce)
+                VStack(alignment: .leading, spacing: 12) {
+                    resultRow(image: "snackIcon", title: "Base", value: selectedCombination.base)
+                    resultRow(image: "snackIcon", title: "Filling", value: selectedCombination.filling)
+                    resultRow(image: "snackIcon", title: "Sauce", value: selectedCombination.sauce)
+                                    
                 }
-
-                Button {
-                    showResultPopup = false
-                } label: {
-                    Text("OK")
+                
+                
+                VStack {
+                    Button {
+                        showResultPopup = false
+                        let snack = Snack(base: selectedCombination.base, filling: selectedCombination.filling, sauce: selectedCombination.sauce)
+                        
+                        viewModel.addSnack(snack)
+                    } label: {
+                        HStack {
+                            Image(systemName: "heart.fill")
+                            
+                            Text("Save to Favorites")
+                        }
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(Color.yellow)
+                        .frame(height: 50)
+                        .background(Gradients.spinBtn.linear)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    
+                    HStack {
+                        Button {
+                            showResultPopup = false
+                        } label: {
+                            Text("Close")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(.white.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                        
+                        Button {
+                            showResultPopup = false
+                        } label: {
+                            Text("Spin Again")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 50)
+                                .background(Color.btn3.opacity(0.5))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                    }
+                    
                 }
             }
             .padding(22)
             .frame(maxWidth: 340)
-            .background(Color(red: 0.08, green: 0.12, blue: 0.24))
+            .background(.resultBg)
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .overlay(
                 RoundedRectangle(cornerRadius: 24)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    .stroke(Color.resultStroke, lineWidth: 1)
             )
             .padding(.horizontal, 24)
         }
         .transition(.opacity)
+
+        
+//        ZStack {
+//            Color.black.opacity(0.45)
+//                .ignoresSafeArea()
+//                .onTapGesture {
+//                    showResultPopup = false
+//                }
+//
+//            VStack(spacing: 18) {
+//                Text("Your Snack")
+//                    .font(.system(size: 28, weight: .heavy))
+//                    .foregroundColor(.white)
+//
+//                VStack(spacing: 12) {
+//                    resultRow(title: "Base", value: selectedCombination.base)
+//                    resultRow(title: "Filling", value: selectedCombination.filling)
+//                    resultRow(title: "Sauce", value: selectedCombination.sauce)
+//                }
+//
+//                Button {
+//                    showResultPopup = false
+//                } label: {
+//                    Text("OK")
+//                        .font(.system(size: 18, weight: .bold))
+//                        .foregroundColor(.black)
+//                        .frame(maxWidth: .infinity)
+//                        .frame(height: 52)
+//                        .background(Color.yellow)
+//                        .clipShape(RoundedRectangle(cornerRadius: 14))
+//                }
+//            }
+//            .padding(22)
+//            .frame(maxWidth: 340)
+//            .background(Color(red: 0.08, green: 0.12, blue: 0.24))
+//            .clipShape(RoundedRectangle(cornerRadius: 24))
+//            .overlay(
+//                RoundedRectangle(cornerRadius: 24)
+//                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+//            )
+//            .padding(.horizontal, 24)
+//        }
+        .transition(.opacity)
     }
 
-    private func resultRow(title: String, value: String) -> some View {
-        VStack(spacing: 6) {
-            Text(title.uppercased())
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.white.opacity(0.65))
-
-            Text(value)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
+    private func resultRow(image: String, title: String, value: String) -> some View {
+        HStack {
+            Image(image)
+                .resizable()
+                .scaledToFit()
+                .frame(height: 35)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title.uppercased())
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.yellow)
+                
+                Text(value)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal, 18)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, 18)
         .background(Color.white.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(lineWidth: 1)
+                .foregroundStyle(.yellow)
+        }
     }
 
     // MARK: - Actions
@@ -329,14 +412,7 @@ struct QuickSnackScrollColumnView: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 28)
                     .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.18),
-                                Color.white.opacity(0.08)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+                        Gradients.snack.linear
                     )
 
                 RoundedRectangle(cornerRadius: 28)
@@ -435,12 +511,6 @@ struct QuickSnackScrollColumnView: View {
     }
 }
 
-// MARK: - Helpers
-
-enum ScrollEdge {
-    case top
-    case bottom
-}
 
 struct ColumnTitleModifier: ViewModifier {
     let width: CGFloat
@@ -489,6 +559,6 @@ struct QuickSnackCombination: Identifiable {
 
 struct QuickSnackScrollMachineView_Previews: PreviewProvider {
     static var previews: some View {
-        QuickSnackScrollMachineView()
+        QuickSnackScrollMachineView(viewModel: FSFavoritesViewModel())
     }
 }
